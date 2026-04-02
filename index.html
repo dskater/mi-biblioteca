@@ -16,11 +16,9 @@
         .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; display: flex; flex-direction: column; }
         .cover { width: 100%; height: 380px; object-fit: cover; background: #252525; }
         .info { padding: 15px; flex-grow: 1; }
-        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .author { color: #aaa; font-size: 0.85rem; margin-bottom: 10px; }
+        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .synopsis { color: #888; font-size: 0.8rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 15px; }
-        .btn-download { display: block; background: #03dac6; color: #000; text-decoration: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; transition: 0.3s; }
-        .btn-download:hover { background: #018786; }
+        .btn-download { display: block; background: #03dac6; color: #000; text-decoration: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; cursor: pointer; border: none; width: 100%; }
         .pagination-bar { margin: 40px 0; text-align: center; }
         .btn-main { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
@@ -37,7 +35,7 @@
     <div id="loader" class="loader"></div>
     <div id="viewer" class="grid"></div>
     <div class="pagination-bar">
-        <button id="next_btn" class="btn-main" style="display:none;">CARGAR MÁS</button>
+        <button id="next_btn" class="btn-main" style="display:none;">CARGAR MÁS LIBROS</button>
     </div>
 </div>
 
@@ -45,7 +43,10 @@
     const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA';
     const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
     const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
-    let accessToken = null, tokenClient = null, nextPageToken = null;
+    
+    let accessToken = null;
+    let tokenClient = null;
+    let nextPageToken = null;
 
     function initGAPI() {
         gapi.load('client', async () => {
@@ -58,7 +59,14 @@
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: 'https://www.googleapis.com/auth/drive.readonly',
-            callback: (resp) => { if (resp.access_token) { accessToken = resp.access_token; processLibrary(); } }
+            callback: (resp) => { 
+                if (resp.access_token) { 
+                    accessToken = resp.access_token; 
+                    // Limpiamos la vista antes de la primera carga
+                    document.getElementById('viewer').innerHTML = '';
+                    processLibrary(); 
+                } 
+            }
         });
     }
 
@@ -75,66 +83,71 @@
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
                 fields: 'nextPageToken, files(id, name)',
                 pageSize: 6,
-                pageToken: nextPageToken
+                pageToken: nextPageToken // Aquí estaba el fallo del paginador
             });
 
             const files = response.result.files;
+            // Actualizamos el token para la siguiente llamada
             nextPageToken = response.result.nextPageToken;
 
             for (const file of files) {
-                document.getElementById('status').innerText = `Leyendo: ${file.name}`;
-                
-                // 1. Obtener los metadatos del EPUB para la portada/sinopsis
-                const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                const buffer = await res.arrayBuffer();
-                const book = ePub(buffer);
-                const meta = await book.loaded.metadata;
-                const cover = await book.coverUrl();
+                try {
+                    document.getElementById('status').innerText = `Procesando: ${file.name}`;
+                    
+                    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
 
-                // 2. Link de descarga directo (usando el ID del archivo)
-                const downloadLink = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
+                    if (!res.ok) throw new Error('Error al bajar el binario');
 
-                renderBook(meta, cover, downloadLink, file.name);
+                    const blob = await res.blob();
+                    const buffer = await blob.arrayBuffer();
+                    const book = ePub(buffer);
+                    const meta = await book.loaded.metadata;
+                    const cover = await book.coverUrl();
+
+                    renderBook(meta, cover, file.id, file.name);
+                } catch (err) {
+                    console.warn("Fallo con un libro:", file.name, err);
+                }
             }
+
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('status').innerText = nextPageToken ? 'Más libros disponibles.' : 'Carga completa.';
+            document.getElementById('status').innerText = nextPageToken ? 'Puedes cargar más.' : 'Fin de la biblioteca.';
             if (nextPageToken) document.getElementById('next_btn').style.display = 'inline-block';
+
         } catch (e) { 
             console.error(e);
-            document.getElementById('status').innerText = 'Error de CORS o permisos. Revisa la consola.'; 
+            document.getElementById('status').innerText = 'Error general de carga.';
             document.getElementById('loader').style.display = 'none';
         }
     }
 
-    function renderBook(meta, cover, url, filename) {
+    function renderBook(meta, cover, fileId, filename) {
         const card = document.createElement('div');
         card.className = 'book-card';
         const desc = meta.description ? meta.description.replace(/<[^>]*>?/gm, '') : 'Sin sinopsis.';
         
         card.innerHTML = `
-            <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=SIN+PORTADA'">
+            <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=EPUB'">
             <div class="info">
-                <div class="title" title="${meta.title || filename}">${meta.title || filename}</div>
-                <div class="author">${meta.creator || 'Autor desconocido'}</div>
+                <div class="title">${meta.title || filename}</div>
                 <div class="synopsis">${desc}</div>
-                <button onclick="downloadFile('${url}', '${filename}')" class="btn-download">DESCARGAR EPUB</button>
+                <button onclick="downloadFile('${fileId}', '${filename}')" class="btn-download">DESCARGAR</button>
             </div>`;
         document.getElementById('viewer').appendChild(card);
     }
 
-    // Función para descargar usando el token de acceso actual
-    async function downloadFile(url, filename) {
+    async function downloadFile(fileId, filename) {
+        const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         const blob = await response.blob();
-        const link = document.createElement('a');
-        link.href = window.URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
     }
 
     window.onload = () => {
