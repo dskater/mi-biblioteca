@@ -3,30 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDA - Mi Biblioteca Cloud</title>
+    <title>SDA - Explorador de Biblioteca Drive</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <script src="https://apis.google.com/js/api.js"></script>
     
     <style>
-        :root { --primary: #3b82f6; --dark: #0f172a; --card: #1e293b; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--dark); color: white; margin: 0; padding: 20px; }
+        :root { --primary: #bb86fc; --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: auto; }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #334155; }
         
-        .btn-auth { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        .btn-auth:hover { background: #2563eb; transform: scale(1.05); }
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid #333; margin-bottom: 30px; }
+        h1 { color: var(--primary); margin: 0; font-size: 1.5rem; }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
-        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
-        .cover { width: 100%; height: 350px; object-fit: cover; background: #334155; }
-        .info { padding: 15px; flex-grow: 1; }
-        .title { font-size: 1.1em; font-weight: bold; margin-bottom: 5px; color: #60a5fa; }
-        .author { font-size: 0.9em; color: #94a3b8; font-style: italic; }
+        .btn-connect { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-connect:hover { background: #9965f4; transform: scale(1.02); }
+
+        #status { margin: 15px 0; font-weight: bold; color: #03dac6; }
         
-        #status { color: #10b981; font-weight: bold; margin-bottom: 20px; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; transition: 0.3s; border: 1px solid #333; }
+        .book-card:hover { border-color: var(--primary); }
+        
+        .cover { width: 100%; height: 380px; object-fit: cover; background: #252525; }
+        .info { padding: 15px; }
+        .title { font-size: 1.1rem; font-weight: bold; color: var(--primary); margin-bottom: 5px; }
+        .author { font-size: 0.9rem; color: #aaa; font-style: italic; }
+        .synopsis { font-size: 0.8rem; color: #888; margin-top: 10px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+        .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -34,24 +40,20 @@
 
 <div class="container">
     <header>
-        <div>
-            <h1>Mi Biblioteca Digital</h1>
-            <p>Explorador automático de archivos EPUB en Drive</p>
-        </div>
-        <button id="auth_button" class="btn-auth">Conectar con Google Drive</button>
+        <h1>Mi Biblioteca Digital (Medellín)</h1>
+        <button id="auth_button" class="btn-connect">Conectar con Google Drive</button>
     </header>
 
-    <div id="status"></div>
+    <div id="status">Esperando conexión...</div>
     <div id="loader" class="loader"></div>
-    
     <div id="viewer" class="grid"></div>
 </div>
 
 <script>
-    // CREDENCIALES DE TU PROYECTO
-    const API_KEY = 'TU_API_KEY_AQUI'; 
-    const CLIENT_ID = 'TU_CLIENT_ID_AQUI.apps.googleusercontent.com';
-    const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
+    // --- PEGA TUS CREDENCIALES AQUÍ ---
+    const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA'; 
+    const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
+    const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky'; // Tu carpeta compartida
 
     const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
     const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
@@ -61,33 +63,40 @@
     }
 
     async function initClient() {
-        await gapi.client.init({
-            apiKey: API_KEY,
-            clientId: CLIENT_ID,
-            discoveryDocs: DISCOVERY_DOCS,
-            scope: SCOPES
-        });
-        
-        document.getElementById('auth_button').onclick = () => {
-            gapi.auth2.getAuthInstance().signIn().then(processLibrary);
-        };
+        try {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                clientId: CLIENT_ID,
+                discoveryDocs: DISCOVERY_DOCS,
+                scope: SCOPES
+            });
+            document.getElementById('status').innerText = 'Listo para conectar.';
+            document.getElementById('auth_button').onclick = handleAuthClick;
+        } catch (e) {
+            console.error(e);
+            document.getElementById('status').innerText = 'Error cargando API de Google.';
+        }
+    }
+
+    function handleAuthClick() {
+        gapi.auth2.getAuthInstance().signIn().then(processLibrary);
     }
 
     async function processLibrary() {
         document.getElementById('auth_button').style.display = 'none';
         document.getElementById('loader').style.display = 'block';
-        document.getElementById('status').innerText = 'Escaneando carpeta...';
+        document.getElementById('status').innerText = 'Leyendo archivos de la carpeta...';
 
         try {
-            // CICLO 1: Listar archivos
+            // CICLO 1: Listar archivos en la carpeta
             const response = await gapi.client.drive.files.list({
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
                 fields: 'files(id, name)'
             });
 
             const files = response.result.files;
-            
-            // CICLO 2: Extraer metadata de cada uno
+
+            // CICLO 2: Entrar a cada archivo, extraer metadata y portada
             for (const file of files) {
                 document.getElementById('status').innerText = `Procesando: ${file.name}`;
                 
@@ -103,12 +112,12 @@
                 renderBook(metadata, cover);
             }
             
-            document.getElementById('status').innerText = 'Biblioteca cargada con éxito.';
+            document.getElementById('status').innerText = `Carga completa: ${files.length} libros encontrados.`;
             document.getElementById('loader').style.display = 'none';
 
         } catch (error) {
             console.error(error);
-            document.getElementById('status').innerText = 'Error al cargar la biblioteca.';
+            document.getElementById('status').innerText = 'Error al acceder a la carpeta.';
         }
     }
 
@@ -116,11 +125,16 @@
         const viewer = document.getElementById('viewer');
         const card = document.createElement('div');
         card.className = 'book-card';
+        
+        // Limpiamos un poco la sinopsis (muchas vienen con tags HTML)
+        const cleanDesc = meta.description ? meta.description.replace(/<[^>]*>?/gm, '') : 'Sin descripción.';
+
         card.innerHTML = `
-            <img src="${cover || 'https://via.placeholder.com/300x450?text=Sin+Portada'}" class="cover">
+            <img src="${cover || 'https://via.placeholder.com/300x450?text=Sin+Portada'}" class="cover" alt="Portada">
             <div class="info">
-                <div class="title">${meta.title}</div>
-                <div class="author">${meta.creator}</div>
+                <div class="title">${meta.title || 'Título Desconocido'}</div>
+                <div class="author">${meta.creator || 'Autor Desconocido'}</div>
+                <div class="synopsis">${cleanDesc}</div>
             </div>
         `;
         viewer.appendChild(card);
