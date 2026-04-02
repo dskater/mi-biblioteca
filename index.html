@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDA - Mi Biblioteca Cloud</title>
-    
+    <title>SDA - Biblioteca Cloud</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     
@@ -16,14 +15,11 @@
         #status { color: #03dac6; font-weight: bold; margin: 15px 0; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
         .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; transition: 0.3s; }
-        .book-card:hover { border-color: var(--primary); transform: translateY(-5px); }
         .cover { width: 100%; height: 350px; object-fit: cover; background: #252525; }
         .info { padding: 15px; }
+        .btn-auth { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        /* Estilo para el botón manual si el de Google falla */
-        .btn-manual { background: var(--primary); color: #000; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; display: none; }
     </style>
 </head>
 <body>
@@ -31,131 +27,7 @@
 <div class="container">
     <header>
         <h1>Mi Biblioteca Digital</h1>
-        <div id="auth_container">
-            <div id="g_id_onload"
-                 data-client_id="580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com"
-                 data-context="signin"
-                 data-ux_mode="popup"
-                 data-callback="handleCredentialResponse"
-                 data-auto_prompt="false">
-            </div>
-            <div class="g_id_signin" data-type="standard"></div>
-            <button id="manual_btn" class="btn-manual">REINTENTAR CONEXIÓN</button>
-        </div>
+        <button id="auth_btn" class="btn-auth">CONECTAR DRIVE</button>
     </header>
-
-    <div id="status">Iniciando sistema...</div>
+    <div id="status">Cargando dependencias de Google...</div>
     <div id="loader" class="loader"></div>
-    <div id="viewer" class="grid"></div>
-</div>
-
-<script>
-    const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA';
-    const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
-    const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
-    let accessToken = null;
-    let tokenClient;
-
-    // 1. Inicializar librerías
-    function initGAPI() {
-        gapi.load('client', async () => {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-            });
-            document.getElementById('status').innerText = 'Sistema listo. Inicia sesión.';
-        });
-    }
-
-    function initGIS() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/drive.readonly',
-            callback: (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                    accessToken = tokenResponse.access_token;
-                    processLibrary();
-                }
-            },
-        });
-        // Si el botón de Google falla, mostramos el manual
-        document.getElementById('manual_btn').style.display = 'block';
-        document.getElementById('manual_btn').onclick = () => tokenClient.requestAccessToken();
-    }
-
-    // 2. Callback del botón de Google
-    function handleCredentialResponse(response) {
-        // Al loguearse, pedimos el token de acceso para Drive
-        tokenClient.requestAccessToken();
-    }
-
-    // 3. Ciclo de procesamiento
-    async function processLibrary() {
-        document.getElementById('auth_container').style.display = 'none';
-        document.getElementById('loader').style.display = 'block';
-        document.getElementById('status').innerText = 'Accediendo a tu Drive...';
-
-        try {
-            const response = await gapi.client.drive.files.list({
-                q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
-                fields: 'files(id, name)'
-            });
-
-            const files = response.result.files;
-            if (files.length === 0) {
-                document.getElementById('status').innerText = 'No hay libros en la carpeta.';
-                document.getElementById('loader').style.display = 'none';
-                return;
-            }
-
-            for (const file of files) {
-                document.getElementById('status').innerText = `Procesando: ${file.name}`;
-                
-                const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                
-                const buffer = await res.arrayBuffer();
-                const book = ePub(buffer);
-                const metadata = await book.loaded.metadata;
-                const cover = await book.coverUrl();
-
-                renderBook(metadata, cover);
-            }
-            document.getElementById('status').innerText = `Carga finalizada (${files.length} libros).`;
-            document.getElementById('loader').style.display = 'none';
-        } catch (error) {
-            console.error(error);
-            document.getElementById('status').innerText = 'Error de permisos o red.';
-        }
-    }
-
-    function renderBook(meta, cover) {
-        const card = document.createElement('div');
-        card.className = 'book-card';
-        card.innerHTML = `
-            <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=EPUB'">
-            <div class="info">
-                <div style="color:#bb86fc; font-weight:bold">${meta.title || 'Sin Título'}</div>
-                <div style="font-size:0.8em; color:#aaa">${meta.creator || 'Autor desconocido'}</div>
-            </div>
-        `;
-        document.getElementById('viewer').appendChild(card);
-    }
-
-    // Carga de scripts con disparadores
-    window.onload = () => {
-        const s1 = document.createElement('script');
-        s1.src = "https://apis.google.com/js/api.js";
-        s1.onload = initGAPI;
-        document.body.appendChild(s1);
-
-        const s2 = document.createElement('script');
-        s2.src = "https://accounts.google.com/gsi/client";
-        s2.onload = initGIS;
-        document.body.appendChild(s2);
-    };
-</script>
-
-</body>
-</html>
