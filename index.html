@@ -3,30 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDA - Biblioteca Cloud Paginada</title>
+    <title>SDA - Biblioteca Cloud Full</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
-    
     <style>
         :root { --primary: #bb86fc; --bg: #121212; --card: #1e1e1e; --text: #e0e0e0; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
         .container { max-width: 1200px; margin: auto; }
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-        
         #status { color: #03dac6; font-weight: bold; margin: 15px 0; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px; }
-        
         .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; display: flex; flex-direction: column; }
-        .cover { width: 100%; height: 400px; object-fit: cover; background: #252525; }
+        .cover { width: 100%; height: 380px; object-fit: cover; background: #252525; }
         .info { padding: 15px; flex-grow: 1; }
-        .title { color: var(--primary); font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; }
-        .author { color: #aaa; font-size: 0.9rem; margin-bottom: 10px; font-style: italic; }
-        .synopsis { color: #888; font-size: 0.85rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-
-        .pagination-bar { margin-top: 40px; display: flex; justify-content: center; gap: 20px; padding: 20px; }
-        .btn { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        .btn:disabled { background: #444; cursor: not-allowed; color: #888; }
+        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; }
+        .author { color: #aaa; font-size: 0.85rem; margin-bottom: 10px; }
+        .synopsis { color: #888; font-size: 0.8rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 15px; }
         
+        /* Botón de descarga */
+        .btn-download { display: inline-block; background: #03dac6; color: #000; text-decoration: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.9rem; transition: 0.3s; }
+        .btn-download:hover { background: #018786; }
+
+        .pagination-bar { margin: 40px 0; text-align: center; }
+        .btn-main { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -36,16 +35,13 @@
 <div class="container">
     <header>
         <h1>Mi Biblioteca Digital</h1>
-        <button id="auth_btn" class="btn">CONECTAR DRIVE</button>
+        <button id="auth_btn" class="btn-main">CONECTAR DRIVE</button>
     </header>
-
-    <div id="status">Esperando conexión...</div>
+    <div id="status">Iniciando sistema...</div>
     <div id="loader" class="loader"></div>
-    
     <div id="viewer" class="grid"></div>
-
     <div class="pagination-bar">
-        <button id="next_btn" class="btn" style="display:none;">CARGAR MÁS LIBROS</button>
+        <button id="next_btn" class="btn-main" style="display:none;">CARGAR MÁS</button>
     </div>
 </div>
 
@@ -53,18 +49,11 @@
     const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA';
     const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
     const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
-    
-    let tokenClient;
-    let accessToken = null;
-    let nextPageToken = null; // Token para el paginador
-    const PAGE_SIZE = 6; // Cantidad de libros por tanda
+    let accessToken = null, tokenClient = null, nextPageToken = null;
 
     function initGAPI() {
         gapi.load('client', async () => {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-            });
+            await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
         });
     }
 
@@ -72,83 +61,64 @@
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: 'https://www.googleapis.com/auth/drive.readonly',
-            callback: (resp) => {
-                if (resp.access_token) {
-                    accessToken = resp.access_token;
-                    document.getElementById('auth_btn').style.display = 'none';
-                    processLibrary();
-                }
-            },
+            callback: (resp) => { if (resp.access_token) { accessToken = resp.access_token; processLibrary(); } }
         });
-        document.getElementById('status').innerText = 'Listo. Conecta para ver tus libros.';
+        document.getElementById('status').innerText = 'Listo para conectar.';
     }
 
     document.getElementById('auth_btn').onclick = () => tokenClient.requestAccessToken();
     document.getElementById('next_btn').onclick = () => processLibrary();
 
     async function processLibrary() {
+        document.getElementById('auth_btn').style.display = 'none';
         document.getElementById('loader').style.display = 'block';
         document.getElementById('next_btn').style.display = 'none';
-        document.getElementById('status').innerText = 'Buscando archivos...';
 
         try {
             const response = await gapi.client.drive.files.list({
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
                 fields: 'nextPageToken, files(id, name)',
-                pageSize: PAGE_SIZE,
-                pageToken: nextPageToken // Si es null, carga la primera página
+                pageSize: 6,
+                pageToken: nextPageToken
             });
 
             const files = response.result.files;
-            nextPageToken = response.result.nextPageToken; // Guardamos el token de la siguiente página
+            nextPageToken = response.result.nextPageToken;
 
             for (const file of files) {
-                document.getElementById('status').innerText = `Extrayendo: ${file.name}`;
-                
+                document.getElementById('status').innerText = `Procesando: ${file.name}`;
                 const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
+                const blob = await res.blob();
+                const downloadUrl = URL.createObjectURL(blob); // URL temporal para descarga
                 
-                const buffer = await res.arrayBuffer();
+                const buffer = await blob.arrayBuffer();
                 const book = ePub(buffer);
-                const metadata = await book.loaded.metadata;
+                const meta = await book.loaded.metadata;
                 const cover = await book.coverUrl();
 
-                renderBook(metadata, cover);
+                renderBook(meta, cover, downloadUrl, file.name);
             }
-
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('status').innerText = nextPageToken ? 'Más libros disponibles.' : 'Todos los libros cargados.';
-            
-            if (nextPageToken) {
-                document.getElementById('next_btn').style.display = 'block';
-            }
-
-        } catch (e) {
-            console.error(e);
-            document.getElementById('status').innerText = 'Error al cargar libros.';
-            document.getElementById('loader').style.display = 'none';
-        }
+            document.getElementById('status').innerText = nextPageToken ? 'Carga parcial lista.' : 'Biblioteca cargada.';
+            if (nextPageToken) document.getElementById('next_btn').style.display = 'inline-block';
+        } catch (e) { document.getElementById('status').innerText = 'Error de conexión.'; }
     }
 
-    function renderBook(meta, cover) {
-        const viewer = document.getElementById('viewer');
+    function renderBook(meta, cover, url, filename) {
         const card = document.createElement('div');
         card.className = 'book-card';
-        
-        // Limpiar HTML de la descripción si existe
-        const description = meta.description 
-            ? meta.description.replace(/<[^>]*>?/gm, '') 
-            : 'Sin sinopsis disponible para este ejemplar.';
-
+        const desc = meta.description ? meta.description.replace(/<[^>]*>?/gm, '') : 'Sin sinopsis.';
         card.innerHTML = `
-            <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=SIN+PORTADA'">
+            <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=EPUB'">
             <div class="info">
-                <div class="title">${meta.title || 'Título desconocido'}</div>
-                <div class="author">${meta.creator || 'Autor desconocido'}</div>
-                <div class="synopsis">${description}</div>
+                <div class="title">${meta.title || filename}</div>
+                <div class="author">${meta.creator || 'Anónimo'}</div>
+                <div class="synopsis">${desc}</div>
+                <a href="${url}" download="${filename}" class="btn-download">DESCARGAR EPUB</a>
             </div>`;
-        viewer.appendChild(card);
+        document.getElementById('viewer').appendChild(card);
     }
 
     window.onload = () => {
