@@ -14,7 +14,7 @@
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
         #status { color: #03dac6; font-weight: bold; margin: 15px 0; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; transition: 0.3s; }
+        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; }
         .cover { width: 100%; height: 350px; object-fit: cover; background: #252525; }
         .info { padding: 15px; }
         .btn-auth { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
@@ -29,5 +29,92 @@
         <h1>Mi Biblioteca Digital</h1>
         <button id="auth_btn" class="btn-auth">CONECTAR DRIVE</button>
     </header>
-    <div id="status">Cargando dependencias de Google...</div>
+    <div id="status">Iniciando...</div>
     <div id="loader" class="loader"></div>
+    <div id="viewer" class="grid"></div>
+</div>
+
+<script>
+    const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA';
+    const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
+    const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
+    
+    let tokenClient;
+    let accessToken = null;
+
+    function initGAPI() {
+        gapi.load('client', async () => {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+            });
+            document.getElementById('status').innerText = 'Drive listo.';
+        });
+    }
+
+    function initGIS() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/drive.readonly',
+            callback: (resp) => {
+                if (resp.access_token) {
+                    accessToken = resp.access_token;
+                    processLibrary();
+                }
+            },
+        });
+        document.getElementById('status').innerText = 'Haz clic para conectar.';
+    }
+
+    document.getElementById('auth_btn').onclick = () => {
+        tokenClient.requestAccessToken({prompt: 'select_account'});
+    };
+
+    async function processLibrary() {
+        document.getElementById('auth_btn').style.display = 'none';
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('status').innerText = 'Escaneando Drive...';
+
+        try {
+            const response = await gapi.client.drive.files.list({
+                q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
+                fields: 'files(id, name)'
+            });
+
+            const files = response.result.files;
+            for (const file of files) {
+                const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const buffer = await res.arrayBuffer();
+                const book = ePub(buffer);
+                const metadata = await book.loaded.metadata;
+                const cover = await book.coverUrl();
+                renderBook(metadata, cover);
+            }
+            document.getElementById('status').innerText = 'Carga finalizada.';
+            document.getElementById('loader').style.display = 'none';
+        } catch (e) {
+            document.getElementById('status').innerText = 'Error de conexión.';
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+
+    function renderBook(meta, cover) {
+        const card = document.createElement('div');
+        card.className = 'book-card';
+        card.innerHTML = `
+            <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=EPUB'">
+            <div class="info">
+                <div style="color:#bb86fc; font-weight:bold">${meta.title || 'S/T'}</div>
+            </div>`;
+        document.getElementById('viewer').appendChild(card);
+    }
+
+    window.onload = () => {
+        const s1 = document.createElement('script'); s1.src = "https://apis.google.com/js/api.js"; s1.onload = initGAPI; document.body.appendChild(s1);
+        const s2 = document.createElement('script'); s2.src = "https://accounts.google.com/gsi/client"; s2.onload = initGIS; document.body.appendChild(s2);
+    };
+</script>
+</body>
+</html>
