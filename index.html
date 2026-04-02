@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDA - Biblioteca Cloud</title>
+    <title>SDA - Mi Biblioteca Cloud</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <style>
@@ -13,12 +13,12 @@
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
         #status { color: #03dac6; font-weight: bold; margin: 15px 0; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px; }
-        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; display: flex; flex-direction: column; }
+        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; display: flex; flex-direction: column; height: 100%; }
         .cover { width: 100%; height: 380px; object-fit: cover; background: #252525; }
-        .info { padding: 15px; flex-grow: 1; }
-        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .synopsis { color: #888; font-size: 0.8rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 15px; }
-        .btn-download { display: block; background: #03dac6; color: #000; text-decoration: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; cursor: pointer; border: none; width: 100%; }
+        .info { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }
+        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; font-size: 1.1rem; }
+        .synopsis { color: #888; font-size: 0.85rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 15px; }
+        .btn-download { background: #03dac6; color: #000; border: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; cursor: pointer; text-decoration: none; margin-top: auto; }
         .pagination-bar { margin: 40px 0; text-align: center; }
         .btn-main { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
@@ -31,7 +31,7 @@
         <h1>Mi Biblioteca Digital</h1>
         <button id="auth_btn" class="btn-main">CONECTAR DRIVE</button>
     </header>
-    <div id="status">Cargando scripts...</div>
+    <div id="status">Cargando sistema...</div>
     <div id="loader" class="loader"></div>
     <div id="viewer" class="grid"></div>
     <div class="pagination-bar">
@@ -46,7 +46,7 @@
     
     let accessToken = null;
     let tokenClient = null;
-    let nextPageToken = null;
+    let currentNextPageToken = null; // Variable corregida para paginación
 
     function initGAPI() {
         gapi.load('client', async () => {
@@ -62,8 +62,8 @@
             callback: (resp) => { 
                 if (resp.access_token) { 
                     accessToken = resp.access_token; 
-                    // Limpiamos la vista antes de la primera carga
-                    document.getElementById('viewer').innerHTML = '';
+                    document.getElementById('viewer').innerHTML = ''; // Limpiar al conectar
+                    currentNextPageToken = null; // Reiniciar paginación
                     processLibrary(); 
                 } 
             }
@@ -83,12 +83,11 @@
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
                 fields: 'nextPageToken, files(id, name)',
                 pageSize: 6,
-                pageToken: nextPageToken // Aquí estaba el fallo del paginador
+                pageToken: currentNextPageToken 
             });
 
             const files = response.result.files;
-            // Actualizamos el token para la siguiente llamada
-            nextPageToken = response.result.nextPageToken;
+            currentNextPageToken = response.result.nextPageToken; // Guardar para la próxima carga
 
             for (const file of files) {
                 try {
@@ -98,7 +97,7 @@
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
 
-                    if (!res.ok) throw new Error('Error al bajar el binario');
+                    if (!res.ok) throw new Error('CORS o Token inválido');
 
                     const blob = await res.blob();
                     const buffer = await blob.arrayBuffer();
@@ -108,13 +107,13 @@
 
                     renderBook(meta, cover, file.id, file.name);
                 } catch (err) {
-                    console.warn("Fallo con un libro:", file.name, err);
+                    console.warn("No se pudo procesar:", file.name);
                 }
             }
 
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('status').innerText = nextPageToken ? 'Puedes cargar más.' : 'Fin de la biblioteca.';
-            if (nextPageToken) document.getElementById('next_btn').style.display = 'inline-block';
+            document.getElementById('status').innerText = currentNextPageToken ? 'Carga lista. Puedes cargar más.' : 'Fin de la biblioteca.';
+            if (currentNextPageToken) document.getElementById('next_btn').style.display = 'inline-block';
 
         } catch (e) { 
             console.error(e);
@@ -139,15 +138,19 @@
     }
 
     async function downloadFile(fileId, filename) {
-        const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        const blob = await response.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
+        try {
+            const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const blob = await response.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+        } catch (err) {
+            alert("Error al descargar. Intenta de nuevo.");
+        }
     }
 
     window.onload = () => {
