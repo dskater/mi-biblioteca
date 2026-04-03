@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Biblioteca Interactiva</title>
+    <title>SDA - Biblioteca Cloud Interactiva</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <style>
@@ -11,54 +11,93 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
         .container { max-width: 1200px; margin: auto; }
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-        #status { color: #03dac6; font-weight: bold; margin: 15px 0; min-height: 20px; }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px; }
-        .book-card { background: var(--card); border-radius: 12px; border: 1px solid #333; display: flex; flex-direction: column; height: 100%; transition: 0.3s; position: relative; }
-
-        /* --- EFECTO ZOOM EN IMAGEN --- */
-        .cover-container { width: 100%; height: 250px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: 12px 12px 0 0; }
-        .cover { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.5s ease; }
-        .cover-container:hover .cover { transform: scale(1.4); } /* Zoom del 40% */
-
-        .info { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }
-        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; font-size: 1.1rem; }
-        .author { color: #aaa; font-size: 0.85rem; margin-bottom: 10px; }
-
-        /* --- SINOPSIS CON TOOLTIP --- */
-        .synopsis { color: #ccc; font-size: 0.85rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; cursor: help; position: relative; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 30px; }
         
-        /* La "Leyenda" que sale al pasar el mouse */
-        .synopsis:hover::after {
-            content: attr(data-fulltext);
-            position: absolute;
-            top: 0; left: 0;
-            background: #2c2c2c;
-            color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid var(--primary);
-            z-index: 10;
-            width: 100%;
-            box-sizing: border-box;
-            display: block;
-            -webkit-line-clamp: unset; /* Quita el límite de líneas */
-            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        .book-card { 
+            background: var(--card); 
+            border-radius: 12px; 
+            border: 1px solid #333; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100%; 
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
         }
 
-        .btn-download { background: #03dac6; color: #000; border: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; cursor: pointer; text-decoration: none; margin-top: 15px; }
+        /* --- EFECTO ZOOM --- */
+        .cover-container { 
+            width: 100%; 
+            height: 220px; 
+            background: #000; 
+            overflow: hidden; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            border-radius: 12px 12px 0 0;
+        }
+        .cover { 
+            max-width: 100%; 
+            max-height: 100%; 
+            object-fit: contain; 
+            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1); 
+        }
+        .book-card:hover .cover { transform: scale(1.25); }
+
+        .info { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }
+        .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; font-size: 1.05rem; }
+        
+        /* --- SINOPSIS EXPANDIBLE --- */
+        .synopsis-wrapper { position: relative; flex-grow: 1; }
+        .synopsis { 
+            color: #bbb; 
+            font-size: 0.85rem; 
+            line-height: 1.4; 
+            display: -webkit-box; 
+            -webkit-line-clamp: 5; 
+            -webkit-box-orient: vertical; 
+            overflow: hidden; 
+            transition: all 0.3s ease;
+        }
+
+        /* Cuando pasas el mouse por la TARJETA, la sinopsis se expande */
+        .book-card:hover { z-index: 10; border-color: var(--primary); box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        .book-card:hover .synopsis { 
+            display: block; 
+            -webkit-line-clamp: unset; 
+            overflow: visible;
+            background: var(--card);
+        }
+
+        .btn-download { 
+            background: #03dac6; 
+            color: #000; 
+            border: none; 
+            padding: 10px; 
+            border-radius: 6px; 
+            text-align: center; 
+            font-weight: bold; 
+            cursor: pointer; 
+            text-decoration: none; 
+            margin-top: 15px; 
+            width: 100%;
+        }
+        
         .btn-main { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #status { color: #03dac6; font-weight: bold; margin: 15px 0; text-align: center; }
     </style>
 </head>
 <body>
+
 <div class="container">
     <header>
         <h1>Mi Biblioteca Digital</h1>
         <button id="auth_btn" class="btn-main">CONECTAR DRIVE</button>
     </header>
-    <div id="status">Cargando...</div>
+    <div id="status">Esperando conexión...</div>
     <div id="loader" class="loader"></div>
     <div id="viewer" class="grid"></div>
 </div>
@@ -72,7 +111,7 @@
     function initGAPI() {
         gapi.load('client', async () => {
             await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
-            document.getElementById('status').innerText = 'APIs listas.';
+            document.getElementById('status').innerText = 'Listo.';
         });
     }
 
@@ -89,23 +128,26 @@
     async function processLibrary() {
         document.getElementById('auth_btn').style.display = 'none';
         document.getElementById('loader').style.display = 'block';
+        document.getElementById('viewer').innerHTML = '';
         try {
             const response = await gapi.client.drive.files.list({
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
                 fields: 'files(id, name)',
-                pageSize: 15
+                pageSize: 20
             });
             const files = response.result.files;
             for (const file of files) {
-                const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                const blob = await res.blob();
-                const buffer = await blob.arrayBuffer();
-                const book = ePub(buffer);
-                const meta = await book.loaded.metadata;
-                const cover = await book.coverUrl();
-                renderBook(meta, cover, file.id, file.name);
+                try {
+                    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    const blob = await res.blob();
+                    const buffer = await blob.arrayBuffer();
+                    const book = ePub(buffer);
+                    const meta = await book.loaded.metadata;
+                    const cover = await book.coverUrl();
+                    renderBook(meta, cover, file.id, file.name);
+                } catch (e) { console.warn("Error en libro:", file.name); }
             }
             document.getElementById('loader').style.display = 'none';
             document.getElementById('status').innerText = 'Biblioteca cargada.';
@@ -119,12 +161,14 @@
         
         card.innerHTML = `
             <div class="cover-container">
-                <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=SIN+PORTADA'">
+                <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=EPUB'">
             </div>
             <div class="info">
                 <div class="title">${meta.title || filename}</div>
-                <div class="author">${meta.creator || 'Autor desconocido'}</div>
-                <div class="synopsis" data-fulltext="${desc}">${desc}</div>
+                <div class="author">${meta.creator || 'Anónimo'}</div>
+                <div class="synopsis-wrapper">
+                    <div class="synopsis">${desc}</div>
+                </div>
                 <button onclick="downloadFile('${fileId}', '${filename}')" class="btn-download">DESCARGAR</button>
             </div>`;
         document.getElementById('viewer').appendChild(card);
