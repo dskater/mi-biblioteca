@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDA - Biblioteca Cloud Medellín</title>
+    <title>Biblioteca Interactiva</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
     <style>
@@ -12,22 +12,41 @@
         .container { max-width: 1200px; margin: auto; }
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
         #status { color: #03dac6; font-weight: bold; margin: 15px 0; min-height: 20px; }
+        
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px; }
-        
-        .book-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid #333; display: flex; flex-direction: column; height: 100%; transition: 0.3s; }
-        .book-card:hover { border-color: var(--primary); transform: translateY(-5px); }
-        
-        /* AJUSTE DE RENDERIZADO DE IMAGEN */
-        .cover-container { width: 100%; height: 250px; background: #000; display: flex; align-items: center; justify-content: center; }
-        .cover { max-width: 100%; max-height: 100%; object-fit: contain; }
-        
+        .book-card { background: var(--card); border-radius: 12px; border: 1px solid #333; display: flex; flex-direction: column; height: 100%; transition: 0.3s; position: relative; }
+
+        /* --- EFECTO ZOOM EN IMAGEN --- */
+        .cover-container { width: 100%; height: 250px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; border-radius: 12px 12px 0 0; }
+        .cover { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.5s ease; }
+        .cover-container:hover .cover { transform: scale(1.4); } /* Zoom del 40% */
+
         .info { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }
         .title { color: var(--primary); font-weight: bold; margin-bottom: 5px; font-size: 1.1rem; }
-        .author { color: #aaa; font-size: 0.85rem; margin-bottom: 10px; font-style: italic; }
-        .synopsis { color: #ccc; font-size: 0.85rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 15px; text-align: justify; }
+        .author { color: #aaa; font-size: 0.85rem; margin-bottom: 10px; }
+
+        /* --- SINOPSIS CON TOOLTIP --- */
+        .synopsis { color: #ccc; font-size: 0.85rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; cursor: help; position: relative; }
         
-        .btn-download { background: #03dac6; color: #000; border: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; cursor: pointer; text-decoration: none; margin-top: auto; }
-        .pagination-bar { margin: 40px 0; text-align: center; }
+        /* La "Leyenda" que sale al pasar el mouse */
+        .synopsis:hover::after {
+            content: attr(data-fulltext);
+            position: absolute;
+            top: 0; left: 0;
+            background: #2c2c2c;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--primary);
+            z-index: 10;
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            -webkit-line-clamp: unset; /* Quita el límite de líneas */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        .btn-download { background: #03dac6; color: #000; border: none; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; cursor: pointer; text-decoration: none; margin-top: 15px; }
         .btn-main { background: var(--primary); color: #000; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .loader { border: 4px solid #333; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; display: none; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -39,19 +58,16 @@
         <h1>Mi Biblioteca Digital</h1>
         <button id="auth_btn" class="btn-main">CONECTAR DRIVE</button>
     </header>
-    <div id="status">Iniciando sistema...</div>
+    <div id="status">Cargando...</div>
     <div id="loader" class="loader"></div>
     <div id="viewer" class="grid"></div>
-    <div class="pagination-bar">
-        <button id="next_btn" class="btn-main" style="display:none;">CARGAR MÁS LIBROS</button>
-    </div>
 </div>
 
 <script>
     const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA';
     const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
     const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
-    let accessToken = null, tokenClient = null, currentNextPageToken = null;
+    let accessToken = null, tokenClient = null;
 
     function initGAPI() {
         gapi.load('client', async () => {
@@ -64,42 +80,35 @@
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: 'https://www.googleapis.com/auth/drive.readonly',
-            callback: (resp) => { if (resp.access_token) { accessToken = resp.access_token; document.getElementById('viewer').innerHTML = ''; currentNextPageToken = null; processLibrary(); } }
+            callback: (resp) => { if (resp.access_token) { accessToken = resp.access_token; processLibrary(); } }
         });
     }
 
     document.getElementById('auth_btn').onclick = () => tokenClient.requestAccessToken();
-    document.getElementById('next_btn').onclick = () => processLibrary();
 
     async function processLibrary() {
         document.getElementById('auth_btn').style.display = 'none';
         document.getElementById('loader').style.display = 'block';
-        document.getElementById('next_btn').style.display = 'none';
         try {
             const response = await gapi.client.drive.files.list({
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
-                fields: 'nextPageToken, files(id, name)',
-                pageSize: 6,
-                pageToken: currentNextPageToken 
+                fields: 'files(id, name)',
+                pageSize: 15
             });
             const files = response.result.files;
-            currentNextPageToken = response.result.nextPageToken;
             for (const file of files) {
-                try {
-                    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    const blob = await res.blob();
-                    const buffer = await blob.arrayBuffer();
-                    const book = ePub(buffer);
-                    const meta = await book.loaded.metadata;
-                    const cover = await book.coverUrl();
-                    renderBook(meta, cover, file.id, file.name);
-                } catch (e) { console.warn("Fallo con:", file.name); }
+                const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const blob = await res.blob();
+                const buffer = await blob.arrayBuffer();
+                const book = ePub(buffer);
+                const meta = await book.loaded.metadata;
+                const cover = await book.coverUrl();
+                renderBook(meta, cover, file.id, file.name);
             }
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('status').innerText = currentNextPageToken ? 'Carga lista.' : 'Fin de biblioteca.';
-            if (currentNextPageToken) document.getElementById('next_btn').style.display = 'inline-block';
+            document.getElementById('status').innerText = 'Biblioteca cargada.';
         } catch (e) { document.getElementById('status').innerText = 'Error de conexión.'; }
     }
 
@@ -107,6 +116,7 @@
         const card = document.createElement('div');
         card.className = 'book-card';
         const desc = meta.description ? meta.description.replace(/<[^>]*>?/gm, '') : 'Sin sinopsis.';
+        
         card.innerHTML = `
             <div class="cover-container">
                 <img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/300x450?text=SIN+PORTADA'">
@@ -114,7 +124,7 @@
             <div class="info">
                 <div class="title">${meta.title || filename}</div>
                 <div class="author">${meta.creator || 'Autor desconocido'}</div>
-                <div class="synopsis">${desc}</div>
+                <div class="synopsis" data-fulltext="${desc}">${desc}</div>
                 <button onclick="downloadFile('${fileId}', '${filename}')" class="btn-download">DESCARGAR</button>
             </div>`;
         document.getElementById('viewer').appendChild(card);
