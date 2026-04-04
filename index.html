@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The EPUB Library</title>
+    <title>Codex Digital | Neural Library</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
+    
     <style>
         :root { 
-            --neon: #00ff41; /* Verde Terminal */
+            --neon: #00ff41; /* Verde Matrix */
             --bg: #050505; 
             --card: #0d0d0d; 
             --text: #00ff41; 
@@ -16,11 +18,12 @@
         }
         
         body { 
-            font-family: 'Courier New', Courier, monospace; 
+            font-family: 'Courier New', monospace; 
             background: var(--bg); 
             color: var(--text); 
             padding: 20px; 
             margin: 0;
+            /* Fondo con rejilla de terminal */
             background-image: linear-gradient(rgba(0, 255, 65, 0.05) 1px, transparent 1px), 
                               linear-gradient(90deg, rgba(0, 255, 65, 0.05) 1px, transparent 1px);
             background-size: 30px 30px;
@@ -28,155 +31,82 @@
 
         .container { max-width: 1300px; margin: auto; }
         
+        /* Encabezado Estilo Cyberpunk */
         header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            border: 1px solid var(--neon); 
-            padding: 20px; 
-            margin-bottom: 30px;
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2);
-            background: rgba(0,0,0,0.8);
+            display: flex; justify-content: space-between; align-items: center; 
+            border: 1px solid var(--neon); padding: 20px; margin-bottom: 30px;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.2); background: rgba(0,0,0,0.9);
         }
-
-        h1 { margin: 0; text-transform: uppercase; letter-spacing: 5px; font-size: 1.5rem; }
 
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 30px; }
         
+        /* Tarjeta de Libro */
         .book-card { 
-            background: var(--card); 
-            border: 1px solid var(--border); 
-            display: flex; 
-            flex-direction: column; 
-            height: 100%; 
+            background: var(--card); border: 1px solid var(--border); 
+            display: flex; flex-direction: column; height: 100%; 
             transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative;
+            position: relative; z-index: 1;
         }
 
+        /* Elevación y brillo al pasar el mouse */
         .book-card:hover { 
-            border-color: var(--neon); 
-            box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
-            transform: scale(1.02);
-            z-index: 50;
+            border-color: var(--neon); box-shadow: 0 0 25px rgba(0, 255, 65, 0.4);
+            transform: scale(1.03); z-index: 50;
         }
 
         .cover-container { 
-            width: 100%; 
-            height: 200px; 
-            background: #000; 
-            overflow: hidden; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
+            width: 100%; height: 200px; background: #000; overflow: hidden; 
+            display: flex; align-items: center; justify-content: center;
             border-bottom: 1px solid var(--border);
         }
         
         .cover { 
-            max-width: 100%; 
-            max-height: 100%; 
-            object-fit: contain; 
-            filter: grayscale(100%) brightness(0.8);
-            transition: 0.5s;
+            max-width: 100%; max-height: 100%; object-fit: contain; 
+            filter: grayscale(100%) brightness(0.7); transition: 0.5s;
         }
         
-        .book-card:hover .cover { 
-            filter: grayscale(0%) brightness(1); 
-            transform: scale(1.1);
-        }
+        .book-card:hover .cover { filter: grayscale(0%) brightness(1); transform: scale(1.1); }
 
         .info { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; }
-        
-        .title { 
-            color: var(--neon); 
-            font-weight: bold; 
-            margin-bottom: 10px; 
-            font-size: 1.1rem; 
-            border-left: 3px solid var(--neon);
-            padding-left: 10px;
-        }
+        .title { color: var(--neon); font-weight: bold; margin-bottom: 10px; border-left: 3px solid var(--neon); padding-left: 10px; }
 
         .synopsis { 
-            color: #888; 
-            font-size: 0.85rem; 
-            line-height: 1.6; 
-            display: -webkit-box; 
-            -webkit-line-clamp: 3; 
-            -webkit-box-orient: vertical; 
-            overflow: hidden;
-            transition: 0.3s;
+            color: #888; font-size: 0.85rem; line-height: 1.6; 
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; 
+            overflow: hidden; transition: 0.3s;
         }
 
-        .book-card:hover .synopsis { 
-            color: #eee;
-            -webkit-line-clamp: 15; 
-            display: block; 
-            overflow: visible;
-        }
+        /* Revelar sinopsis completa al pasar el mouse */
+        .book-card:hover .synopsis { color: #eee; -webkit-line-clamp: 15; display: block; overflow: visible; }
 
         .btn-download { 
-            background: transparent; 
-            color: var(--neon); 
-            border: 1px solid var(--neon); 
-            padding: 10px; 
-            margin-top: 20px;
-            text-align: center; 
-            font-weight: bold; 
-            cursor: pointer; 
-            text-transform: uppercase;
-            transition: 0.3s;
+            background: transparent; color: var(--neon); border: 1px solid var(--neon); 
+            padding: 10px; margin-top: 20px; cursor: pointer; text-transform: uppercase; font-family: inherit;
         }
 
-        .btn-download:hover { 
-            background: var(--neon); 
-            color: #000; 
-            box-shadow: 0 0 10px var(--neon);
-        }
+        .btn-download:hover { background: var(--neon); color: #000; box-shadow: 0 0 10px var(--neon); }
 
-        /* PAGINACIÓN ESTILO HACKER */
+        /* Paginador Numérico */
         .pagination-container { margin: 50px 0; display: flex; justify-content: center; gap: 15px; }
-        .page-btn { 
-            background: black; 
-            color: var(--neon); 
-            border: 1px solid var(--border); 
-            padding: 10px 20px; 
-            cursor: pointer; 
-        }
-        .page-btn.active { 
-            background: var(--neon); 
-            color: black; 
-            box-shadow: 0 0 15px var(--neon);
-        }
+        .page-btn { background: black; color: var(--neon); border: 1px solid var(--border); padding: 10px 20px; cursor: pointer; font-family: inherit; }
+        .page-btn.active { background: var(--neon); color: black; box-shadow: 0 0 15px var(--neon); }
 
-        .btn-main { 
-            background: var(--neon); 
-            color: black; 
-            border: none; 
-            padding: 12px 24px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            box-shadow: 0 0 10px var(--neon);
-        }
+        .btn-main { background: var(--neon); color: black; border: none; padding: 12px 24px; font-weight: bold; cursor: pointer; box-shadow: 0 0 10px var(--neon); font-family: inherit; }
 
-        .loader { 
-            border: 2px solid #111; 
-            border-top: 2px solid var(--neon); 
-            border-radius: 50%; 
-            width: 40px; 
-            height: 40px; 
-            animation: spin 0.8s linear infinite; 
-            margin: 20px auto; 
-            display: none;
-        }
+        .loader { border: 2px solid #111; border-top: 2px solid var(--neon); border-radius: 50%; width: 40px; height: 40px; animation: spin 0.8s linear infinite; margin: 20px auto; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #status { text-align: center; font-size: 0.9rem; margin-bottom: 10px; color: var(--neon); }
+        #status { text-align: center; font-size: 0.8rem; margin-bottom: 10px; color: var(--neon); }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>[ SYSTEM_LIBRARY_DRIVE ]</h1>
-        <button id="auth_btn" class="btn-main">> ACCESS_SYSTEM</button>
+        <h1>[ CODEX_DIGITAL ]</h1>
+        <div>
+            <button id="clear_cache" style="background:none; border:1px solid #333; color:#444; padding:5px 10px; cursor:pointer; font-size:10px; margin-right:10px;">FLUSH_CACHE</button>
+            <button id="auth_btn" class="btn-main">> ACCESS_SYSTEM</button>
+        </div>
     </header>
     
     <div id="status">STATUS: STANDBY...</div>
@@ -187,15 +117,31 @@
 </div>
 
 <script>
+    // CREDENCIALES DE GOOGLE DRIVE
     const API_KEY = 'AIzaSyBfnX_FzxyIYWj_rE5x8ggQCIa6LU9oVqA';
     const CLIENT_ID = '580589042015-lt7lblgj6gn99flar43touqmedg6t0m8.apps.googleusercontent.com';
     const FOLDER_ID = '1415n3CdO_yMWZE1Nn-_Ts6Iqw3Eqr3Ky';
     
     let accessToken = null, tokenClient = null;
-    let pageMap = { 1: null }; 
-    let currentPage = 1;
+    let pageMap = { 1: null }, currentPage = 1;
     const PAGE_SIZE = 9;
 
+    // --- MÓDULO DE PERSISTENCIA (CACHE LOCAL) ---
+    // Guardamos los metadatos en un JSON para no procesar el EPUB cada vez que refrescas
+    const CACHE_NAME = 'codex_cache_v2';
+    let libraryCache = JSON.parse(localStorage.getItem(CACHE_NAME)) || {};
+
+    function saveToCache(id, data) {
+        libraryCache[id] = data;
+        localStorage.setItem(CACHE_NAME, JSON.stringify(libraryCache));
+    }
+
+    document.getElementById('clear_cache').onclick = () => {
+        localStorage.removeItem(CACHE_NAME);
+        location.reload();
+    };
+
+    // --- INICIALIZACIÓN DE GOOGLE APIs ---
     function initGAPI() {
         gapi.load('client', async () => {
             await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
@@ -212,14 +158,16 @@
 
     document.getElementById('auth_btn').onclick = () => tokenClient.requestAccessToken();
 
+    // --- MOTOR DE CARGA Y PAGINACIÓN ---
     async function changePage(num) {
         currentPage = num;
-        document.getElementById('viewer').innerHTML = '';
+        document.getElementById('viewer').innerHTML = ''; // Limpiamos pantalla
         document.getElementById('loader').style.display = 'block';
         document.getElementById('auth_btn').style.display = 'none';
         document.getElementById('top-anchor').scrollIntoView({ behavior: 'smooth' });
 
         try {
+            // Consulta a Drive con orden alfabético y límite de 9
             const response = await gapi.client.drive.files.list({
                 q: `'${FOLDER_ID}' in parents and mimeType = 'application/epub+zip'`,
                 fields: 'nextPageToken, files(id, name)',
@@ -229,34 +177,47 @@
             });
 
             const files = response.result.files;
+            
+            // Si hay más páginas, guardamos el token para el botón numérico
             if (response.result.nextPageToken && !pageMap[num + 1]) pageMap[num + 1] = response.result.nextPageToken;
 
             for (const file of files) {
-                try {
-                    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    const blob = await res.blob();
-                    const buffer = await blob.arrayBuffer();
-                    const book = ePub(buffer);
-                    const meta = await book.loaded.metadata;
-                    const cover = await book.coverUrl();
-                    renderBook(meta, cover, file.id, file.name);
-                } catch (e) { console.warn("FILE_ERR: " + file.name); }
+                // Si ya procesamos este libro antes, lo sacamos del JSON (Carga instantánea)
+                if (libraryCache[file.id]) {
+                    const cached = libraryCache[file.id];
+                    renderBook(cached.meta, cached.cover, file.id, file.name);
+                } else {
+                    // Si es nuevo, descargamos el binario y extraemos metadata
+                    try {
+                        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+                            headers: { 'Authorization': `Bearer ${accessToken}` }
+                        });
+                        const blob = await res.blob();
+                        const buffer = await blob.arrayBuffer();
+                        const book = ePub(buffer);
+                        const meta = await book.loaded.metadata;
+                        const cover = await book.coverUrl();
+                        
+                        // Guardamos en memoria local
+                        saveToCache(file.id, { meta, cover });
+                        renderBook(meta, cover, file.id, file.name);
+                    } catch (e) { console.warn("ERR_PROCESS: " + file.name); }
+                }
             }
 
             renderPagination();
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('status').innerText = `ACCESSING_PAGE: ${currentPage}`;
-        } catch (e) { document.getElementById('status').innerText = 'CONNECTION_FAIL'; }
+            document.getElementById('status').innerText = `ACCESS_GRANTED: P${currentPage}`;
+        } catch (e) { document.getElementById('status').innerText = 'CRITICAL_ERROR: NO_DATA'; }
     }
 
+    // --- RENDERIZADO DE INTERFAZ ---
     function renderPagination() {
         const nav = document.getElementById('pagination');
         nav.innerHTML = '';
         Object.keys(pageMap).sort((a,b) => a-b).forEach(page => {
             const btn = document.createElement('button');
-            btn.innerText = `P-${page}`;
+            btn.innerText = `[${page}]`;
             btn.className = `page-btn ${page == currentPage ? 'active' : ''}`;
             btn.onclick = () => changePage(parseInt(page));
             nav.appendChild(btn);
@@ -266,13 +227,14 @@
     function renderBook(meta, cover, fileId, filename) {
         const card = document.createElement('div');
         card.className = 'book-card';
-        const desc = meta.description ? meta.description.replace(/<[^>]*>?/gm, '') : 'NO_DATA_AVAILABLE';
+        const desc = meta.description ? meta.description.replace(/<[^>]*>?/gm, '') : 'DATA_NOT_FOUND';
+        
         card.innerHTML = `
-            <div class="cover-container"><img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/200x300?text=DATA_LINK'"></div>
+            <div class="cover-container"><img src="${cover || ''}" class="cover" onerror="this.src='https://via.placeholder.com/200x300?text=LINK_ERROR'"></div>
             <div class="info">
                 <div class="title">${meta.title || filename}</div>
                 <div class="synopsis">${desc}</div>
-                <button onclick="downloadFile('${fileId}', '${filename}')" class="btn-download">DOWNLOAD_EPUB</button>
+                <button onclick="downloadFile('${fileId}', '${filename}')" class="btn-download">PULL_EPUB</button>
             </div>`;
         document.getElementById('viewer').appendChild(card);
     }
@@ -284,6 +246,7 @@
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
     }
 
+    // Carga inicial de scripts
     window.onload = () => {
         const s1 = document.createElement('script'); s1.src = "https://apis.google.com/js/api.js"; s1.onload = initGAPI; document.body.appendChild(s1);
         const s2 = document.createElement('script'); s2.src = "https://accounts.google.com/gsi/client"; s2.onload = initGIS; document.body.appendChild(s2);
